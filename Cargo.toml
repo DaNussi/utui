@@ -9,4 +9,15 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4.3.14", features = ["derive"] }
+clap = { version = "4.6.4", features = ["derive"] }
+ratatui = { version = "0.30.2", features = ["all-widgets", "serde"] }
+color-eyre = "0.6.5"
+crossterm = "0.29.0"
+serde = "1.0.229"
+
+# Read the optimization guideline for more details: https://ratatui.rs/recipes/apps/release-your-app/#optimizations
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
