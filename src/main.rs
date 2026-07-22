@@ -1,7 +1,7 @@
 use std::os::unix::thread;
 
 use color_eyre::eyre::{bail, Result, WrapErr};
-use futures_lite::StreamExt;
+use futures::StreamExt;
 use hyprland::{
     event_listener::{
         self, AsyncEventListener, Event::ActiveWindowChanged, EventListener, EventStream,
@@ -20,8 +20,8 @@ use tracing::{debug, info, instrument, Level};
 use tracing_subscriber::util::SubscriberInitExt;
 
 mod app;
-// mod tui;
-use crate::app::App;
+mod event;
+mod tui;
 
 fn main() -> Result<()> {
     color_eyre::install()?;

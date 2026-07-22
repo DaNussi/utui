@@ -1,10 +1,23 @@
+use crossterm::event::{KeyEvent, KeyEventKind};
+use futures::{FutureExt, StreamExt};
+use ratatui::{
+    backend::{Backend, CrosstermBackend},
+    Terminal,
+};
+use tokio::{
+    sync::mpsc::{UnboundedReceiver, UnboundedSender},
+    task::JoinHandle,
+};
+
+use crate::event::Event;
+
 pub struct Tui {
-    pub terminal: ratatui::Terminal<Backend<std::io::Stderr>>,
+    pub terminal: Terminal<CrosstermBackend<std::io::Stderr>>,
+    pub frame_rate: f64,
+    pub tick_rate: f64,
     pub task: JoinHandle<()>,
     pub event_rx: UnboundedReceiver<Event>,
     pub event_tx: UnboundedSender<Event>,
-    pub frame_rate: f64,
-    pub tick_rate: f64,
 }
 
 impl Tui {
@@ -25,11 +38,18 @@ impl Tui {
                     match maybe_event {
                       Some(Ok(evt)) => {
                         match evt {
-                          CrosstermEvent::Key(key) => {
+                          crossterm::event::Event::Key(key) => {
                             if key.kind == KeyEventKind::Press {
                               _event_tx.send(Event::Key(key)).unwrap();
                             }
                           },
+                          crossterm::event::Event::Resize(width, height) => {
+                            _event_tx.send(Event::Resize(width, height)).unwrap();
+                          },
+                          crossterm::event::Event::Mouse(mouse) => {
+                            _event_tx.send(Event::Mouse(mouse)).unwrap();
+                          },
+                          _ => {},
                         }
                       }
                       Some(Err(_)) => {

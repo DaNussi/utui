@@ -21,7 +21,7 @@
         {
             "label": "Nix Run",
             "type": "shell",
-            "command": "alacritty --working-directory . --class utui --command nix run --print-build-logs",
+            "command": "nix run --print-build-logs", // alacritty --working-directory . --class utui --command nix run --print-build-logs
             "runOptions": {
                 "instancePolicy": "terminateOldest",
                 "instanceLimit": 1
@@ -30,7 +30,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "hide": true,
+            // "hide": true,
             "presentation": {
                 "echo": true,
                 "reveal": "always",
