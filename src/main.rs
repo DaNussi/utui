@@ -1,5 +1,9 @@
 use std::{
+    error::Error,
+    fmt::{self, Debug, Display},
     io::{self, stdout},
+    rc::Rc,
+    str::FromStr,
     sync::Arc,
     time::Duration,
 };
@@ -10,16 +14,21 @@ use crossterm::{
     ExecutableCommand,
 };
 use futures::StreamExt;
+use home_config::{HomeConfig, JsonError};
 use hyprland::{
     config::binds::Flag::s,
     data::{Workspace, Workspaces},
+    dispatch::{
+        DispatchType::{self, Custom},
+        WorkspaceIdentifier,
+    },
     shared::{HyprData, HyprDataActive},
 };
 use nf_icons::nf;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Flex, Layout, Rect, Spacing},
-    style::Stylize,
+    style::{Color, ParseColorError, Stylize},
     text::Line,
     widgets::{Block, Widget},
     DefaultTerminal, Frame, TerminalOptions,
@@ -28,11 +37,14 @@ use ratatui_interact::{
     components::{Button, ButtonState},
     traits::ClickRegionRegistry,
 };
-use tracing::{error, info};
+use serde::{Deserialize, Serialize};
+use tracing::{error, info, warn};
 use tracing_subscriber::registry;
 
 #[tokio::main]
-async fn main() -> io::Result<()> {
+async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt::init();
+
     let mut terminal = ratatui::init_with_options(TerminalOptions {
         viewport: ratatui::Viewport::Inline(1),
     });
@@ -40,7 +52,7 @@ async fn main() -> io::Result<()> {
     crossterm::terminal::enable_raw_mode()?;
     crossterm::execute!(stdout(), crossterm::event::EnableMouseCapture)?;
 
-    App::new().run(&mut terminal).await?;
+    App::new()?.run(&mut terminal).await?;
 
     crossterm::execute!(stdout(), crossterm::event::DisableMouseCapture)?;
     crossterm::terminal::disable_raw_mode()?;
@@ -54,27 +66,128 @@ enum ClickableElement {
     Wifi,
     Bluetooth,
     Volume,
-    Workspace(u32),
+    Workspace(i32),
     Clock,
 }
 
-pub struct App<'a> {
+pub struct App {
     frame: u128,
+    pallet: StylixPallet,
     workspace: Workspace,
     workspaces: Workspaces,
     exit: bool,
-    registry: ClickRegionRegistry<&'a ClickableElement>,
+    registry: ClickRegionRegistry<Rc<ClickableElement>>,
 }
 
-impl<'a> App<'a> {
-    pub fn new() -> Self {
-        App {
+#[derive(Serialize, Deserialize, Default)]
+pub struct RawStylixPallet {
+    base00: String,
+    base01: String,
+    base02: String,
+    base03: String,
+    base04: String,
+    base05: String,
+    base06: String,
+    base07: String,
+    base08: String,
+    base09: String,
+    base0A: String,
+    base0B: String,
+    base0C: String,
+    base0D: String,
+    base0E: String,
+    base0F: String,
+    author: String,
+    scheme: String,
+    slug: String,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub struct StylixPallet {
+    base00: Color,
+    base01: Color,
+    base02: Color,
+    base03: Color,
+    base04: Color,
+    base05: Color,
+    base06: Color,
+    base07: Color,
+    base08: Color,
+    base09: Color,
+    base0A: Color,
+    base0B: Color,
+    base0C: Color,
+    base0D: Color,
+    base0E: Color,
+    base0F: Color,
+    author: String,
+    scheme: String,
+    slug: String,
+}
+
+impl StylixPallet {
+    fn parse_color(mut value: String) -> Result<Color, ParseColorError> {
+        value.insert_str(0, "#");
+        Color::from_str(&value)
+    }
+
+    fn parse(value: RawStylixPallet) -> Result<StylixPallet, ParseColorError> {
+        Ok(StylixPallet {
+            base00: StylixPallet::parse_color(value.base00)?,
+            base01: StylixPallet::parse_color(value.base01)?,
+            base02: StylixPallet::parse_color(value.base02)?,
+            base03: StylixPallet::parse_color(value.base03)?,
+            base04: StylixPallet::parse_color(value.base04)?,
+            base05: StylixPallet::parse_color(value.base05)?,
+            base06: StylixPallet::parse_color(value.base06)?,
+            base07: StylixPallet::parse_color(value.base07)?,
+            base08: StylixPallet::parse_color(value.base08)?,
+            base09: StylixPallet::parse_color(value.base09)?,
+            base0A: StylixPallet::parse_color(value.base0A)?,
+            base0B: StylixPallet::parse_color(value.base0B)?,
+            base0C: StylixPallet::parse_color(value.base0C)?,
+            base0D: StylixPallet::parse_color(value.base0D)?,
+            base0E: StylixPallet::parse_color(value.base0E)?,
+            base0F: StylixPallet::parse_color(value.base0F)?,
+            author: value.author,
+            scheme: value.scheme,
+            slug: value.slug,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub enum AppError {
+    ConfigLoadError(JsonError),
+    ConfigParseError(ParseColorError),
+}
+
+impl std::fmt::Display for AppError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AppError::ConfigLoadError(json_error) => json_error.fmt(f),
+            AppError::ConfigParseError(e) => Display::fmt(e, f),
+        }
+    }
+}
+
+impl std::error::Error for AppError {}
+
+impl App {
+    pub fn new() -> Result<Self, AppError> {
+        let raw_pallet: RawStylixPallet = HomeConfig::with_config_dir("stylix", "palette.json")
+            .json()
+            .map_err(|e| AppError::ConfigLoadError(e))?;
+        let pallet = StylixPallet::parse(raw_pallet).map_err(|e| AppError::ConfigParseError(e))?;
+
+        Ok(App {
             frame: 0,
+            pallet,
             workspace: Workspace::get_active().unwrap(),
             workspaces: Workspaces::get().unwrap(),
             exit: false,
             registry: ClickRegionRegistry::new(),
-        }
+        })
     }
 
     /// runs the application's main loop until the user quits
@@ -129,7 +242,7 @@ impl<'a> App<'a> {
                             match mouse_event.kind {
                                 MouseEventKind::Down(_) => {
                                     if let Some(element) = self.registry.handle_click(mouse_event.column, mouse_event.row) {
-                                        match element {
+                                        match element.as_ref() {
                                             ClickableElement::Power => {
                                                 // Handle power button click
                                                 info!("Power button clicked!");
@@ -147,8 +260,11 @@ impl<'a> App<'a> {
                                                 info!("Volume button clicked!");
                                             }
                                             ClickableElement::Workspace(workspace_id) => {
-                                                // Handle workspace click
-                                                info!("Workspace {} clicked!", workspace_id);
+                                                let dispatch_command = format!("hl.dsp.focus({{ workspace = '{}' }})", workspace_id);
+                                                let result = hyprland::dispatch::Dispatch::call(Custom(&dispatch_command, ""));
+                                                if let Err(e) = result {
+                                                    error!("{:?}", e)
+                                                };
                                             }
                                             ClickableElement::Clock => {
                                                 // Handle clock click
@@ -203,7 +319,8 @@ impl<'a> App<'a> {
         .areas(block_area);
 
         self.registry.clear();
-        self.registry.register(left_area, &ClickableElement::Power);
+        self.registry
+            .register(left_area, Rc::new(ClickableElement::Power));
 
         block.render(area, buf);
         self.left_render(left_area, buf);
@@ -218,21 +335,42 @@ impl<'a> App<'a> {
     fn center_render(&mut self, area: Rect, buf: &mut Buffer) {
         let mut workspace_refs: Vec<&Workspace> = self.workspaces.iter().collect();
         workspace_refs.sort_by_key(|workspace| workspace.id);
-        let mut center_segments = Vec::new();
+
+        let workspaces_count = workspace_refs.len() as usize;
+
+        let layout = Layout::default()
+            .direction(ratatui::layout::Direction::Horizontal)
+            .constraints(vec![Constraint::Length(1); workspaces_count])
+            .spacing(2)
+            .flex(Flex::SpaceBetween)
+            .split(area);
+
         for (index, workspace) in workspace_refs.iter().enumerate() {
-            if index > 0 {
-                center_segments.push("  ".reset());
-            }
+            let workspace_area = if let Some(area) = layout.get(index) {
+                *area
+            } else {
+                warn!(
+                    "Failed to get workspace area for workspace {}!",
+                    workspace.id
+                );
+                continue;
+            };
 
             let workspace_label = workspace.id.to_string();
             if workspace.id == self.workspace.id {
-                center_segments.push(workspace_label.black().on_yellow().bold());
+                workspace_label
+                    .black()
+                    .on_yellow()
+                    .bold()
+                    .render(workspace_area, buf);
             } else {
-                center_segments.push(workspace_label.yellow());
+                workspace_label.yellow().render(workspace_area, buf);
             }
-        }
 
-        Line::from(center_segments).render(area, buf);
+            let clickable_element = ClickableElement::Workspace(workspace.id);
+            self.registry
+                .register(workspace_area, Rc::new(clickable_element));
+        }
     }
 
     fn left_width(&self) -> u16 {
@@ -255,12 +393,14 @@ impl<'a> App<'a> {
         nf!("nf-md-bluetooth").yellow().render(bluetooth_area, buf);
         nf!("nf-md-volume_high").yellow().render(volume_area, buf);
 
-        self.registry.register(power_area, &ClickableElement::Power);
-        self.registry.register(wifi_area, &ClickableElement::Wifi);
         self.registry
-            .register(bluetooth_area, &ClickableElement::Bluetooth);
+            .register(power_area, Rc::new(ClickableElement::Power));
         self.registry
-            .register(volume_area, &ClickableElement::Volume);
+            .register(wifi_area, Rc::new(ClickableElement::Wifi));
+        self.registry
+            .register(bluetooth_area, Rc::new(ClickableElement::Bluetooth));
+        self.registry
+            .register(volume_area, Rc::new(ClickableElement::Volume));
     }
 
     fn clock_text(&self) -> String {
@@ -277,6 +417,7 @@ impl<'a> App<'a> {
             .areas(area);
 
         self.clock_text().yellow().render(clock_area, buf);
-        self.registry.register(clock_area, &ClickableElement::Clock);
+        self.registry
+            .register(clock_area, Rc::new(ClickableElement::Clock));
     }
 }

@@ -3,6 +3,7 @@
     "rust-analyzer.files.excludeDirs": [
         ".direnv"
     ],
+    "terminal.integrated.fontFamily": "Symbols Nerd Font Mono"
     // https://twitter.com/sridca/status/1674947342607216641
     // "editor.inlayHints.enabled": "offUnlessPressed",
 }
