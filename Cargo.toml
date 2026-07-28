@@ -23,7 +23,7 @@ chrono = "0.4.45"
 ratatui-interact = "0.5.3"
 home-config = { version = "0.7.0", features = ["json"] }
 anyhow = "1.0.104"
-
+stylix = { path = "../stylix-rs" }
 
 # Read the optimization guideline for more details: https://ratatui.rs/recipes/apps/release-your-app/#optimizations
 [profile.release]

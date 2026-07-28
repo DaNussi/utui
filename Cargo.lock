@@ -1946,6 +1946,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "stylix"
+version = "0.0.0"
+dependencies = [
+ "home-config",
+ "serde",
+]
+
+[[package]]
 name = "syn"
 version = "1.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2310,6 +2318,7 @@ dependencies = [
  "ratatui",
  "ratatui-interact",
  "serde",
+ "stylix",
  "tokio",
  "tracing",
  "tracing-serde",
