@@ -1986,6 +1986,8 @@ dependencies = [
 [[package]]
 name = "stylix"
 version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "059956a3c06ecfbb587fa47ecc900a230c908266cc9385212a96541943accb67"
 dependencies = [
  "home-config",
  "ratatui-core",
